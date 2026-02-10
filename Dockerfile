@@ -60,4 +60,4 @@ RUN python3.8 -m pip install submodules/simple-knn --no-build-isolation
 RUN python3.8 -m pip install submodules/diff-gaussian-rasterization --no-build-isolation
 
 # Default command
-CMD ["python3.8"]
+RUN echo 'alias python="python3.8"' >> ~/.bashrc
