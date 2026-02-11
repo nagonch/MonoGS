@@ -1,0 +1,4 @@
+inherit_from: "configs/rgbd/ycb_in_eoat/base_config.yaml"
+Dataset:
+  dataset_path: "datasets/ycb_in_eoat/cracker_box_yalehand0/"
+  single_thread: True

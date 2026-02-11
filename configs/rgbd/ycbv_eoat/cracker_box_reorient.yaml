@@ -1,0 +1,4 @@
+inherit_from: "configs/rgbd/ycb_in_eoat/base_config.yaml"
+Dataset:
+  dataset_path: "datasets/ycb_in_eoat/cracker_box_reorient/"
+  single_thread: True

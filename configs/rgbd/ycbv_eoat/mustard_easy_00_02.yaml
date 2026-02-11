@@ -1,0 +1,4 @@
+inherit_from: "configs/rgbd/ycb_in_eoat/base_config.yaml"
+Dataset:
+  dataset_path: "datasets/ycb_in_eoat/mustard_easy_00_02/"
+  single_thread: True
