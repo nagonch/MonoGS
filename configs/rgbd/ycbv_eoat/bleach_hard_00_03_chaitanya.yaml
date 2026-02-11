@@ -1,4 +1,4 @@
 inherit_from: "configs/rgbd/ycbv_eoat/base_config.yaml"
 Dataset:
-  dataset_path: "datasets/ycb_in_eoat/bleach_hard_00_03_chaitanya/"
+  dataset_path: "datasets/ycbv_eoat/bleach_hard_00_03_chaitanya/"
   single_thread: True

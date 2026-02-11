@@ -9,10 +9,10 @@ Results:
 
 Dataset:
   sensor_type: 'depth'
-  pcd_downsample: 64
-  pcd_downsample_init: 32
+  pcd_downsample: 1
+  pcd_downsample_init: 1
   adaptive_pointsize: True
-  point_size: 0.05
+  point_size: 0.01
   type: 'ycbv_eoat'
 
 
@@ -43,8 +43,8 @@ Training:
   single_thread: True
   spherical_harmonics: False
   lr:
-    cam_rot_delta: 0.0003
-    cam_trans_delta: 0.0001
+    cam_rot_delta: 0.03
+    cam_trans_delta: 0.01
 
 
 opt_params:
