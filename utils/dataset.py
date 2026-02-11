@@ -520,18 +520,18 @@ class RealsenseDataset(BaseDataset):
 class YCBV_EOAT(BaseDataset):
     def __init__(self, args, path, config):
         super().__init__(args, path, config)
-
+        self.path = config["Dataset"]["dataset_path"]
         self.device = "cuda:0"
         self.dtype = torch.float32
 
-        self.rgb_paths = sorted(glob.glob(os.path.join(path, "rgb", "*.png")))
-        self.depth_paths = sorted(glob.glob(os.path.join(path, "depth", "*.png")))
-        self.mask_paths = sorted(glob.glob(os.path.join(path, "gt_mask", "*.png")))
+        self.rgb_paths = sorted(glob.glob(os.path.join(self.path, "rgb", "*.png")))
+        self.depth_paths = sorted(glob.glob(os.path.join(self.path, "depth", "*.png")))
+        self.mask_paths = sorted(glob.glob(os.path.join(self.path, "gt_mask", "*.png")))
         self.pose_paths = sorted(
-            glob.glob(os.path.join(path, "annotated_poses", "*.txt"))
+            glob.glob(os.path.join(self.path, "annotated_poses", "*.txt"))
         )
         self.num_imgs = len(self.rgb_paths)
-        self.K = np.loadtxt(os.path.join(path, "cam_K.txt"))
+        self.K = np.loadtxt(os.path.join(self.path, "cam_K.txt"))
         self.fx = self.K[0, 0]
         self.fy = self.K[1, 1]
         self.cx = self.K[0, 2]
@@ -578,13 +578,84 @@ class YCBV_EOAT(BaseDataset):
             device=self.device, dtype=self.dtype
         )
         mask = self.masks[idx]
-        image = (
-            torch.from_numpy(image / 255.0)
-            .clamp(0.0, 1.0)
-            .permute(2, 0, 1)
-            .to(device=self.device, dtype=self.dtype)
-        )
+        image = torch.from_numpy(image / 255.0).clamp(0.0, 1.0)
+        image[mask == 0] = 0.0  # set background to black
+        image = image.permute(2, 0, 1).to(device=self.device, dtype=self.dtype)
+        return image, depth, pose
 
+
+class YCBV_LF(BaseDataset):
+    def __init__(self, args, path, config):
+        super().__init__(args, path, config)
+        self.path = config["Dataset"]["dataset_path"]
+        self.device = "cuda:0"
+        self.dtype = torch.float32
+
+        self.lf_paths = list(sorted(os.listdir(os.path.join(self.path))))
+        self.rgb_paths = [
+            os.path.join(self.path, p, "0012.png") for p in self.lf_paths if "LF_" in p
+        ]
+        self.mask_paths = [
+            os.path.join(self.path, p, "masks", "0012.png")
+            for p in self.lf_paths
+            if "LF_" in p
+        ]
+
+        self.depth_paths = sorted(glob.glob(os.path.join(self.path, "depth", "*.png")))
+        self.pose_paths = sorted(
+            glob.glob(os.path.join(self.path, "object_poses", "*.txt"))
+        )
+        self.num_imgs = len(self.rgb_paths)
+        self.K = np.loadtxt(os.path.join(self.path, "camera_matrix.txt"))
+        self.fx = self.K[0, 0]
+        self.fy = self.K[1, 1]
+        self.cx = self.K[0, 2]
+        self.cy = self.K[1, 2]
+        self.height, self.width = Image.open(self.rgb_paths[0]).size[::-1]  # H,W
+        self.fovx = focal2fov(self.fx, self.width)
+        self.fovy = focal2fov(self.fy, self.height)
+
+        self.disorted = False
+        self.dist_coeffs = None
+        self.map1x = None
+        self.map1y = None
+
+        self.has_depth = True
+        self.depth_scale = 1000.0
+        self.scene_info = {
+            "nerf_normalization": {
+                "radius": 5.0,
+                "translation": np.zeros(3),
+            }
+        }
+
+        self.poses = []
+        for pose_path in self.pose_paths:
+            pose = np.loadtxt(pose_path)
+            self.poses.append(np.linalg.inv(pose))
+
+        self.masks = []
+        for mask_path in self.mask_paths:
+            mask = np.array(Image.open(mask_path))
+            mask = (mask > 0).astype(np.uint8)  # convert to binary
+            self.masks.append(mask)
+
+    def __len__(self):
+        return self.num_imgs
+
+    def __getitem__(self, idx):
+        image = np.array(Image.open(self.rgb_paths[idx]))
+        depth = (
+            np.array(Image.open(self.depth_paths[idx])).astype(np.float32)
+            / self.depth_scale
+        )
+        pose = torch.from_numpy(self.poses[idx]).to(
+            device=self.device, dtype=self.dtype
+        )
+        mask = self.masks[idx]
+        image = torch.from_numpy(image / 255.0).clamp(0.0, 1.0)
+        image[mask == 0] = 0.0  # set background to black
+        image = image.permute(2, 0, 1).to(device=self.device, dtype=self.dtype)
         return image, depth, pose
 
 
@@ -597,6 +668,10 @@ def load_dataset(args, path, config):
         return EurocDataset(args, path, config)
     elif config["Dataset"]["type"] == "realsense":
         return RealsenseDataset(args, path, config)
+    elif config["Dataset"]["type"] == "ycbv_eoat":
+        return YCBV_EOAT(args, path, config)
+    elif config["Dataset"]["type"] == "ycbv_lf":
+        return YCBV_LF(args, path, config)
     else:
         raise ValueError("Unknown dataset type")
 
