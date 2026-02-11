@@ -173,8 +173,7 @@ class EuRoCParser:
             trans = data[pose_indices[i], 1:4]
             quat = data[pose_indices[i], 4:8]
             quat = quat[[1, 2, 3, 0]]
-            
-            
+
             T_w_i = trimesh.transformations.quaternion_matrix(np.roll(quat, 1))
             T_w_i[:3, 3] = trans
             T_w_c = np.dot(T_w_i, T_i_c0)
@@ -431,15 +430,17 @@ class RealsenseDataset(BaseDataset):
         super().__init__(args, path, config)
         self.pipeline = rs.pipeline()
         self.h, self.w = 720, 1280
-        
+
         self.depth_scale = 0
         if self.config["Dataset"]["sensor_type"] == "depth":
-            self.has_depth = True 
-        else: 
+            self.has_depth = True
+        else:
             self.has_depth = False
 
         self.rs_config = rs.config()
-        self.rs_config.enable_stream(rs.stream.color, self.w, self.h, rs.format.bgr8, 30)
+        self.rs_config.enable_stream(
+            rs.stream.color, self.w, self.h, rs.format.bgr8, 30
+        )
         if self.has_depth:
             self.rs_config.enable_stream(rs.stream.depth)
 
@@ -458,7 +459,7 @@ class RealsenseDataset(BaseDataset):
             self.profile.get_stream(rs.stream.color)
         )
         self.rgb_intrinsics = self.rgb_profile.get_intrinsics()
-        
+
         self.fx = self.rgb_intrinsics.fx
         self.fy = self.rgb_intrinsics.fy
         self.cx = self.rgb_intrinsics.ppx
@@ -479,14 +480,11 @@ class RealsenseDataset(BaseDataset):
 
         if self.has_depth:
             self.depth_sensor = self.profile.get_device().first_depth_sensor()
-            self.depth_scale  = self.depth_sensor.get_depth_scale()
+            self.depth_scale = self.depth_sensor.get_depth_scale()
             self.depth_profile = rs.video_stream_profile(
                 self.profile.get_stream(rs.stream.depth)
             )
             self.depth_intrinsics = self.depth_profile.get_intrinsics()
-        
-        
-
 
     def __getitem__(self, idx):
         pose = torch.eye(4, device=self.device, dtype=self.dtype)
@@ -498,7 +496,7 @@ class RealsenseDataset(BaseDataset):
             aligned_frames = self.align.process(frameset)
             rgb_frame = aligned_frames.get_color_frame()
             aligned_depth_frame = aligned_frames.get_depth_frame()
-            depth = np.array(aligned_depth_frame.get_data())*self.depth_scale
+            depth = np.array(aligned_depth_frame.get_data()) * self.depth_scale
             depth[depth < 0] = 0
             np.nan_to_num(depth, nan=1000)
         else:
@@ -509,6 +507,77 @@ class RealsenseDataset(BaseDataset):
         if self.disorted:
             image = cv2.remap(image, self.map1x, self.map1y, cv2.INTER_LINEAR)
 
+        image = (
+            torch.from_numpy(image / 255.0)
+            .clamp(0.0, 1.0)
+            .permute(2, 0, 1)
+            .to(device=self.device, dtype=self.dtype)
+        )
+
+        return image, depth, pose
+
+
+class YCBV_EOAT(BaseDataset):
+    def __init__(self, args, path, config):
+        super().__init__(args, path, config)
+
+        self.device = "cuda:0"
+        self.dtype = torch.float32
+
+        self.rgb_paths = sorted(glob.glob(os.path.join(path, "rgb", "*.png")))
+        self.depth_paths = sorted(glob.glob(os.path.join(path, "depth", "*.png")))
+        self.mask_paths = sorted(glob.glob(os.path.join(path, "gt_mask", "*.png")))
+        self.pose_paths = sorted(
+            glob.glob(os.path.join(path, "annotated_poses", "*.txt"))
+        )
+        self.num_imgs = len(self.rgb_paths)
+        self.K = np.loadtxt(os.path.join(path, "cam_K.txt"))
+        self.fx = self.K[0, 0]
+        self.fy = self.K[1, 1]
+        self.cx = self.K[0, 2]
+        self.cy = self.K[1, 2]
+        self.height, self.width = Image.open(self.rgb_paths[0]).size[::-1]  # H,W
+        self.fovx = focal2fov(self.fx, self.width)
+        self.fovy = focal2fov(self.fy, self.height)
+
+        self.disorted = False
+        self.dist_coeffs = None
+        self.map1x = None
+        self.map1y = None
+
+        self.has_depth = True
+        self.depth_scale = 1000.0
+        self.scene_info = {
+            "nerf_normalization": {
+                "radius": 5.0,
+                "translation": np.zeros(3),
+            }
+        }
+
+        self.poses = []
+        for pose_path in self.pose_paths:
+            pose = np.loadtxt(pose_path)
+            self.poses.append(np.linalg.inv(pose))
+
+        self.masks = []
+        for mask_path in self.mask_paths:
+            mask = np.array(Image.open(mask_path))
+            mask = (mask > 0).astype(np.uint8)  # convert to binary
+            self.masks.append(mask)
+
+    def __len__(self):
+        return self.num_imgs
+
+    def __getitem__(self, idx):
+        image = np.array(Image.open(self.rgb_paths[idx]))
+        depth = (
+            np.array(Image.open(self.depth_paths[idx])).astype(np.float32)
+            / self.depth_scale
+        )
+        pose = torch.from_numpy(self.poses[idx]).to(
+            device=self.device, dtype=self.dtype
+        )
+        mask = self.masks[idx]
         image = (
             torch.from_numpy(image / 255.0)
             .clamp(0.0, 1.0)
@@ -530,3 +599,7 @@ def load_dataset(args, path, config):
         return RealsenseDataset(args, path, config)
     else:
         raise ValueError("Unknown dataset type")
+
+
+if __name__ == "__main__":
+    pass
