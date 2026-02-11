@@ -1,0 +1,4 @@
+inherit_from: "configs/rgbd/ycbv_lf/base_config.yaml"
+Dataset:
+  dataset_path: "datasets/ycbv_lf/bleach_hard_00_03_chaitanya/"
+  single_thread: True
