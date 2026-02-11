@@ -570,7 +570,7 @@ class YCBV_EOAT(BaseDataset):
 
     def __getitem__(self, idx):
         print(idx)
-        image = np.array(Image.open(self.rgb_paths[idx]))
+        image = np.array(Image.open(self.rgb_paths[idx]).convert("RGB"))
         depth = (
             np.array(Image.open(self.depth_paths[idx])).astype(np.float32)
             / self.depth_scale
@@ -646,7 +646,7 @@ class YCBV_LF(BaseDataset):
 
     def __getitem__(self, idx):
         print(idx)
-        image = np.array(Image.open(self.rgb_paths[idx]))
+        image = np.array(Image.open(self.rgb_paths[idx]).convert("RGB"))
         depth = (
             np.array(Image.open(self.depth_paths[idx])).astype(np.float32)
             / self.depth_scale
