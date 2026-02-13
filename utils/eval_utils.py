@@ -110,7 +110,7 @@ def eval_ate(frames, kf_ids, save_dir, iterations, final=False, monocular=False)
         monocular=monocular,
     )
     wandb.log({"frame_idx": latest_frame_idx, "ate": ate})
-    return ate
+    return ate, trj_est_np, trj_gt_np
 
 
 def eval_rendering(
